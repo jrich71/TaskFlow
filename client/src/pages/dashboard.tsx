@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Plus, Calendar, CheckCircle2, Circle, Trash2, LogOut } from "lucide-react";
+import { Plus, Calendar, CheckCircle2, Circle, Trash2, LogOut, Edit, ArrowUpDown } from "lucide-react";
 import { TaskWithCategory, UserStats, Category, User } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -18,11 +19,18 @@ export default function Dashboard() {
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
   const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
+  const [isCreateCategoryOpen, setIsCreateCategoryOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<TaskWithCategory | null>(null);
+  const [sortBy, setSortBy] = useState<'dueDate' | 'category' | 'title'>('dueDate');
   const [newTask, setNewTask] = useState({
     title: "",
     description: "",
     categoryId: "",
     dueDate: "",
+  });
+  const [newCategory, setNewCategory] = useState({
+    name: "",
+    color: "#3B82F6",
   });
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -56,6 +64,27 @@ export default function Dashboard() {
     queryKey: ["/api/user/activities"],
   });
 
+  // Fetch heatmap data for the last 30 days for the progress chart
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const today = new Date().toISOString().split('T')[0];
+  
+  const { data: heatmapData } = useQuery({
+    queryKey: ["/api/user/heatmap", thirtyDaysAgo, today],
+    queryFn: async () => {
+      const response = await fetch(`/api/user/heatmap?startDate=${thirtyDaysAgo}&endDate=${today}`, {
+        credentials: 'include'
+      });
+      if (!response.ok) return [];
+      return response.json();
+    },
+  });
+
+  // Transform heatmap data for the chart
+  const chartData = Array.isArray(heatmapData) ? heatmapData.map((item: any) => ({
+    date: new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    tasks: item.count
+  })) : [];
+
   const completeTaskMutation = useMutation({
     mutationFn: (taskId: number) => apiRequest("POST", `/api/tasks/${taskId}/complete`),
     onSuccess: () => {
@@ -85,6 +114,46 @@ export default function Dashboard() {
       toast({
         title: "Error",
         description: "Failed to create task. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateTaskMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest("PUT", `/api/tasks/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/stats"] });
+      setEditingTask(null);
+      toast({
+        title: "Task updated!",
+        description: "Your task has been updated successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update task. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const createCategoryMutation = useMutation({
+    mutationFn: (categoryData: any) => apiRequest("POST", "/api/categories", categoryData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
+      setIsCreateCategoryOpen(false);
+      setNewCategory({ name: "", color: "#3B82F6" });
+      toast({
+        title: "Category created!",
+        description: "Your new category has been added successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to create category. Please try again.",
         variant: "destructive",
       });
     },
@@ -121,6 +190,57 @@ export default function Dashboard() {
     createTaskMutation.mutate(taskData);
   };
 
+  const handleCreateCategory = () => {
+    if (!newCategory.name.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a category name.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    createCategoryMutation.mutate(newCategory);
+  };
+
+  const handleEditTask = (task: TaskWithCategory) => {
+    setEditingTask(task);
+    setNewTask({
+      title: task.title,
+      description: task.description || "",
+      categoryId: task.categoryId?.toString() || "",
+      dueDate: task.dueDate || "",
+    });
+  };
+
+  const handleUpdateTask = () => {
+    if (!editingTask || !newTask.title.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a task title.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const taskData = {
+      title: newTask.title,
+      description: newTask.description || undefined,
+      categoryId: newTask.categoryId ? parseInt(newTask.categoryId) : undefined,
+      dueDate: newTask.dueDate || undefined,
+    };
+
+    updateTaskMutation.mutate({ id: editingTask.id, data: taskData });
+  };
+
+  // Points calculation formula: Base points + Streak bonus + Category bonus
+  const calculatePoints = (completedTasks: number, currentStreak: number) => {
+    const basePoints = completedTasks * 10; // 10 points per task
+    const streakBonus = Math.floor(currentStreak / 3) * 5; // 5 bonus points every 3-day streak
+    const weeklyBonus = Math.floor(completedTasks / 7) * 25; // 25 bonus points for every 7 tasks
+    return basePoints + streakBonus + weeklyBonus;
+  };
+
   const todayTasks = tasks.filter(task => {
     const today = new Date().toISOString().split('T')[0];
     return task.dueDate === today && !task.completed;
@@ -135,7 +255,28 @@ export default function Dashboard() {
     return task.dueDate && next7Days.includes(task.dueDate) && !task.completed && task.dueDate !== today;
   });
 
-  const displayedTasks = showCompleted ? tasks.filter(t => t.completed) : tasks.filter(t => !t.completed);
+  // Sort and filter tasks
+  const filteredTasks = showCompleted ? tasks.filter(t => t.completed) : tasks.filter(t => !t.completed);
+  
+  const sortedTasks = [...filteredTasks].sort((a, b) => {
+    switch (sortBy) {
+      case 'dueDate':
+        if (!a.dueDate && !b.dueDate) return 0;
+        if (!a.dueDate) return 1;
+        if (!b.dueDate) return -1;
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      case 'category':
+        const aCat = a.category?.name || 'No Category';
+        const bCat = b.category?.name || 'No Category';
+        return aCat.localeCompare(bCat);
+      case 'title':
+        return a.title.localeCompare(b.title);
+      default:
+        return 0;
+    }
+  });
+
+  const displayedTasks = sortedTasks;
 
   return (
     <div className="min-h-screen bg-background">
