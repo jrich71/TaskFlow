@@ -316,26 +316,41 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getHeatmapData(userId: string, startDate: string, endDate: string): Promise<HeatmapData[]> {
+    // Get all completed tasks for the user (without date filtering first to debug)
     const userTasks = await db
       .select()
       .from(tasks)
       .where(
         and(
           eq(tasks.userId, userId),
-          eq(tasks.completed, true),
-          gte(tasks.completedAt, new Date(startDate)),
-          lte(tasks.completedAt, new Date(endDate))
+          eq(tasks.completed, true)
         )
       );
     
+    console.log('All completed tasks for user:', userTasks.map(t => ({ 
+      id: t.id, 
+      title: t.title, 
+      completedAt: t.completedAt 
+    })));
+    
     const dateMap = new Map<string, number>();
     
+    // Filter tasks by date range and count them
     userTasks.forEach(task => {
       if (task.completedAt) {
-        const date = task.completedAt.toISOString().split('T')[0];
-        dateMap.set(date, (dateMap.get(date) || 0) + 1);
+        const completedDate = new Date(task.completedAt);
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        
+        // Check if the completion date falls within our range
+        if (completedDate >= start && completedDate <= end) {
+          const date = task.completedAt.toISOString().split('T')[0];
+          dateMap.set(date, (dateMap.get(date) || 0) + 1);
+        }
       }
     });
+    
+    console.log('Date map for range', startDate, 'to', endDate, ':', Object.fromEntries(dateMap));
     
     const result: HeatmapData[] = [];
     const start = new Date(startDate);
@@ -349,6 +364,7 @@ export class DatabaseStorage implements IStorage {
       });
     }
     
+    console.log('Final heatmap result:', result);
     return result;
   }
 }
