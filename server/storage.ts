@@ -244,11 +244,12 @@ export class MemStorage implements IStorage {
       ...task, 
       id,
       createdAt: new Date(),
-      profileImage: task.profileImage || null,
-      currentStreak: task.currentStreak || null,
-      longestStreak: task.longestStreak || null,
-      totalPoints: task.totalPoints || null,
-      lastTaskDate: task.lastTaskDate || null
+      description: task.description || null,
+      categoryId: task.categoryId || null,
+      startDate: task.startDate || null,
+      dueDate: task.dueDate || null,
+      completed: task.completed || null,
+      completedAt: task.completedAt || null
     };
     this.tasks.set(id, newTask);
     return newTask;
