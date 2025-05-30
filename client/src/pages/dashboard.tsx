@@ -257,8 +257,13 @@ export default function Dashboard() {
 
   const completedTasks = tasks.filter(task => task.completed);
 
-  // Sort and filter tasks
-  const filteredTasks = showCompleted ? tasks.filter(t => t.completed) : tasks.filter(t => !t.completed);
+  // Filter, sort and display tasks
+  let filteredTasks = showCompleted ? tasks.filter(t => t.completed) : tasks.filter(t => !t.completed);
+  
+  // Apply category filter
+  if (selectedCategory !== null) {
+    filteredTasks = filteredTasks.filter(task => task.categoryId === selectedCategory);
+  }
   
   const sortedTasks = [...filteredTasks].sort((a, b) => {
     switch (sortBy) {
@@ -503,6 +508,75 @@ export default function Dashboard() {
                     </div>
                   </DialogContent>
                 </Dialog>
+
+                {/* Edit Task Dialog */}
+                <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Edit Task</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="editTitle">Title</Label>
+                        <Input
+                          id="editTitle"
+                          value={newTask.title}
+                          onChange={(e) => setNewTask({...newTask, title: e.target.value})}
+                          placeholder="Enter task title"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="editDescription">Description</Label>
+                        <Textarea
+                          id="editDescription"
+                          value={newTask.description}
+                          onChange={(e) => setNewTask({...newTask, description: e.target.value})}
+                          placeholder="Enter task description"
+                          rows={3}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="editCategory">Category</Label>
+                        <Select value={newTask.categoryId} onValueChange={(value) => setNewTask({...newTask, categoryId: value})}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {categories.map((category) => (
+                              <SelectItem key={category.id} value={category.id.toString()}>
+                                <div className="flex items-center">
+                                  <div 
+                                    className="w-3 h-3 rounded-full mr-2" 
+                                    style={{ backgroundColor: category.color }}
+                                  />
+                                  {category.name}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="editDueDate">Due Date</Label>
+                        <Input
+                          id="editDueDate"
+                          type="date"
+                          value={newTask.dueDate}
+                          onChange={(e) => setNewTask({...newTask, dueDate: e.target.value})}
+                        />
+                      </div>
+                      <div className="flex justify-end space-x-2">
+                        <Button variant="outline" onClick={() => setEditingTask(null)}>
+                          Cancel
+                        </Button>
+                        <Button onClick={handleUpdateTask} disabled={updateTaskMutation.isPending}>
+                          {updateTaskMutation.isPending ? "Updating..." : "Update Task"}
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
                 <Button
                   variant={showCompleted ? "outline" : "default"}
                   size="sm"
@@ -543,6 +617,47 @@ export default function Dashboard() {
                   {category.name}
                 </Button>
               ))}
+              <Dialog open={isCreateCategoryOpen} onOpenChange={setIsCreateCategoryOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Plus className="w-4 h-4 mr-1" />
+                    Add Category
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Create New Category</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="categoryName">Name</Label>
+                      <Input
+                        id="categoryName"
+                        value={newCategory.name}
+                        onChange={(e) => setNewCategory({...newCategory, name: e.target.value})}
+                        placeholder="Enter category name"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="categoryColor">Color</Label>
+                      <Input
+                        id="categoryColor"
+                        type="color"
+                        value={newCategory.color}
+                        onChange={(e) => setNewCategory({...newCategory, color: e.target.value})}
+                      />
+                    </div>
+                    <div className="flex justify-end space-x-2">
+                      <Button variant="outline" onClick={() => setIsCreateCategoryOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button onClick={handleCreateCategory} disabled={createCategoryMutation.isPending}>
+                        {createCategoryMutation.isPending ? "Creating..." : "Create Category"}
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
             
             {/* Tasks List */}
@@ -604,14 +719,25 @@ export default function Dashboard() {
                         </div>
                       </div>
                       
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => deleteTaskMutation.mutate(task.id)}
-                        disabled={deleteTaskMutation.isPending}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      <div className="flex items-center space-x-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEditTask(task)}
+                          className="text-muted-foreground hover:text-primary"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => deleteTaskMutation.mutate(task.id)}
+                          disabled={deleteTaskMutation.isPending}
+                          className="text-muted-foreground hover:text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </div>
                   </Card>
                 ))}
