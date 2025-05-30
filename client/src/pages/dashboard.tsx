@@ -255,6 +255,8 @@ export default function Dashboard() {
     return task.dueDate && next7Days.includes(task.dueDate) && !task.completed && task.dueDate !== today;
   });
 
+  const completedTasks = tasks.filter(task => task.completed);
+
   // Sort and filter tasks
   const filteredTasks = showCompleted ? tasks.filter(t => t.completed) : tasks.filter(t => !t.completed);
   
@@ -369,7 +371,7 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Total Points</p>
-                <p className="text-2xl font-bold text-foreground">{stats?.totalPoints || 0}</p>
+                <p className="text-2xl font-bold text-foreground">{calculatePoints(completedTasks.length, stats?.currentStreak || 0)}</p>
               </div>
               <div className="bg-purple-100 dark:bg-purple-900/20 p-3 rounded-lg">
                 <CheckCircle2 className="text-purple-600 dark:text-purple-400 w-5 h-5" />
@@ -378,12 +380,48 @@ export default function Dashboard() {
           </Card>
         </div>
 
+        {/* Progress Overview Chart */}
+        <Card className="p-6 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-foreground">Progress Overview</h3>
+            <p className="text-sm text-muted-foreground">Last 30 days</p>
+          </div>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis />
+                <Tooltip />
+                <Line 
+                  type="monotone" 
+                  dataKey="tasks" 
+                  stroke="#3B82F6" 
+                  strokeWidth={2}
+                  dot={{ fill: '#3B82F6' }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
           {/* Task Management */}
           <div className="xl:col-span-2">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold text-foreground">Your Tasks</h2>
               <div className="flex items-center space-x-2">
+                <Select value={sortBy} onValueChange={(value: 'dueDate' | 'category' | 'title') => setSortBy(value)}>
+                  <SelectTrigger className="w-40">
+                    <ArrowUpDown className="w-4 h-4 mr-2" />
+                    <SelectValue placeholder="Sort by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="dueDate">Due Date</SelectItem>
+                    <SelectItem value="category">Category</SelectItem>
+                    <SelectItem value="title">Title</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Dialog open={isCreateTaskOpen} onOpenChange={setIsCreateTaskOpen}>
                   <DialogTrigger asChild>
                     <Button>
