@@ -338,14 +338,19 @@ export class DatabaseStorage implements IStorage {
     // Filter tasks by date range and count them
     userTasks.forEach(task => {
       if (task.completedAt) {
-        const completedDate = new Date(task.completedAt);
+        const completedDateStr = task.completedAt.toISOString().split('T')[0];
         const start = new Date(startDate);
         const end = new Date(endDate);
+        const completedDate = new Date(completedDateStr);
+        
+        console.log('Checking task:', task.title, 'completed on:', completedDateStr, 'range:', startDate, 'to', endDate);
         
         // Check if the completion date falls within our range
         if (completedDate >= start && completedDate <= end) {
-          const date = task.completedAt.toISOString().split('T')[0];
-          dateMap.set(date, (dateMap.get(date) || 0) + 1);
+          console.log('Task', task.title, 'is within range, adding to count');
+          dateMap.set(completedDateStr, (dateMap.get(completedDateStr) || 0) + 1);
+        } else {
+          console.log('Task', task.title, 'is NOT within range');
         }
       }
     });
