@@ -1,0 +1,184 @@
+1. Purpose & Scope
+Purpose:
+ Build a simple, engaging to-do list web application that helps users organize tasks, track daily progress, and build positive habits through streaks and rewards.
+Scope:
+ • Core user-facing features (dashboard, task CRUD, categories)
+ • Habit-forming mechanics (streaks, points/rewards)
+ • Data visualization (GitHub-style heatmap)
+ • Secure user authentication
+
+2. Objectives & Success Metrics
+Objective
+Metric
+Enable users to manage tasks easily
+≥80% task creation-to-completion rate
+Increase daily engagement
+≥5 daily active users (initial goal)
+Foster habit formation via streaks
+30-day average streak ≥10 days
+Provide clear visual progress feedback
+≥90% of users interact with graph
+
+
+3. User Personas
+“Busy Bee”: Juggles work and side projects; needs quick task entry and overview.
+
+
+“Habit-Builder”: Wants to cultivate daily routines; motivated by streaks & rewards.
+
+
+“Organizer”: Prefers categorizing & filtering tasks; values structure.
+
+
+
+4. User Stories
+Authentication
+
+
+As a new user, I want to sign up and verify my email so I can securely access the app.
+
+
+As a returning user, I want to log in with my credentials so I can resume managing my tasks.
+
+
+Task Management
+
+
+As a user, I want to add a new task with title, optional description, start date, due date, and category so I can plan and prioritize my work.
+
+
+As a user, I want to edit or delete a task so I can keep my list up to date.
+
+
+Categories
+
+
+As a user, I want to create and assign categories (e.g., “Work,” “Personal”) so I can filter and group my tasks.
+
+
+Dashboard & Visualization
+
+
+As a user, I want to see an at-a-glance dashboard showing upcoming tasks, active streak, and total points so I stay motivated.
+
+
+As a user, I want a GitHub-style heatmap of days vs. tasks completed so I can visualize my consistency over time.
+
+
+Streaks & Rewards
+
+
+As a user, I want to earn a streak by completing at least one task per day so I build healthy habits.
+
+
+As a user, I want to accumulate points or badges for each streak milestone (e.g., 7-day streak) so I feel rewarded.
+
+
+
+5. Functional Requirements
+5.1 User Authentication
+Sign Up: email, password, confirmation
+
+
+Log In / Log Out
+
+
+Password Reset: via email link
+
+
+Session Management: JWT or secure cookies
+
+
+5.2 Dashboard
+Overview Cards:
+
+
+“Tasks Due Today” (count & list)
+
+
+“Upcoming Tasks” (next 7 days)
+
+
+“Current Streak” (days in a row)
+
+
+“Points Balance”
+
+
+Quick Add Task: inline form for title + category
+
+
+5.3 Task CRUD
+Create Task Form:
+
+
+Title (required)
+
+
+Description (optional)
+
+
+Category (dropdown)
+
+
+Start Date (datepicker)
+
+
+Due Date (datepicker)
+
+
+Edit/Delete Task from task list or detail view
+
+
+5.4 Categories
+Create / Rename / Delete Categories
+
+
+Assign Task to Category
+
+
+Filter Tasks by category on dashboard and list view
+
+
+5.5 Streaks & Rewards
+Streak Logic:
+
+
+Reset if zero completions on any calendar day
+
+
+Increment when ≥1 task completed in a day
+
+
+Points System:
+
+
++1 point per completed task
+
+
+Bonus points for streak milestones (e.g., +10 points at 7-day mark)
+
+
+Notifications:
+
+
+Daily email/push reminder if streak in danger
+
+
+5.6 Progress Visualization
+Heatmap Chart:
+
+
+X-axis: weekdays
+
+
+Y-axis: calendar weeks/months
+
+
+Cell intensity: number of tasks completed that day
+
+
+Tooltip on hover: date + count
+
+
+Toggle Views: weekly / monthly / all-time
