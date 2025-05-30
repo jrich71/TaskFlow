@@ -1,13 +1,30 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { setupAuth, isAuthenticated } from "./replitAuth";
 import { insertTaskSchema, insertCategorySchema, insertActivitySchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Get current user (mock user with ID 1)
-  app.get("/api/user", async (req, res) => {
+  // Auth middleware
+  await setupAuth(app);
+
+  // Auth routes
+  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(1);
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+  
+  // Get current user
+  app.get("/api/user", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
@@ -18,9 +35,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get user stats
-  app.get("/api/user/stats", async (req, res) => {
+  app.get("/api/user/stats", isAuthenticated, async (req: any, res) => {
     try {
-      const stats = await storage.getUserStats(1);
+      const userId = req.user.claims.sub;
+      const stats = await storage.getUserStats(userId);
       res.json(stats);
     } catch (error) {
       res.status(500).json({ message: "Failed to get user stats" });
@@ -28,64 +46,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get user activities
-  app.get("/api/user/activities", async (req, res) => {
+  app.get("/api/user/activities", isAuthenticated, async (req: any, res) => {
     try {
-      const activities = await storage.getUserActivities(1);
+      const userId = req.user.claims.sub;
+      const activities = await storage.getUserActivities(userId);
       res.json(activities);
     } catch (error) {
-      res.status(500).json({ message: "Failed to get activities" });
+      res.status(500).json({ message: "Failed to get user activities" });
     }
   });
 
-  // Get heatmap data
-  app.get("/api/user/heatmap", async (req, res) => {
+  // Get user heatmap data
+  app.get("/api/user/heatmap", isAuthenticated, async (req: any, res) => {
     try {
+      const userId = req.user.claims.sub;
       const { startDate, endDate } = req.query;
-      const heatmapData = await storage.getHeatmapData(
-        1, 
-        startDate as string || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        endDate as string || new Date().toISOString().split('T')[0]
-      );
+      if (!startDate || !endDate) {
+        return res.status(400).json({ message: "Start date and end date are required" });
+      }
+      const heatmapData = await storage.getHeatmapData(userId, startDate as string, endDate as string);
       res.json(heatmapData);
     } catch (error) {
       res.status(500).json({ message: "Failed to get heatmap data" });
     }
   });
 
-  // Categories routes
-  app.get("/api/categories", async (req, res) => {
+  // Get categories
+  app.get("/api/categories", isAuthenticated, async (req: any, res) => {
     try {
-      const categories = await storage.getCategories(1);
+      const userId = req.user.claims.sub;
+      const categories = await storage.getCategories(userId);
       res.json(categories);
     } catch (error) {
       res.status(500).json({ message: "Failed to get categories" });
     }
   });
 
-  app.post("/api/categories", async (req, res) => {
+  // Create category
+  app.post("/api/categories", isAuthenticated, async (req: any, res) => {
     try {
-      const categoryData = { ...req.body, userId: 1 };
-      const validatedData = insertCategorySchema.parse(categoryData);
-      const category = await storage.createCategory(validatedData);
-      
-      // Create activity
-      const activityData = {
-        userId: 1,
-        text: `Created new category '${category.name}'`,
-        type: "category_created" as const,
-      };
-      const validatedActivity = insertActivitySchema.parse(activityData);
-      await storage.createActivity(validatedActivity);
-      
-      res.json(category);
+      const userId = req.user.claims.sub;
+      const categoryData = insertCategorySchema.parse({
+        ...req.body,
+        userId,
+      });
+      const category = await storage.createCategory(categoryData);
+      res.status(201).json(category);
     } catch (error) {
       res.status(500).json({ message: "Failed to create category" });
     }
   });
 
-  // Tasks routes
-  app.get("/api/tasks", async (req, res) => {
+  // Update category
+  app.put("/api/categories/:id", isAuthenticated, async (req: any, res) => {
     try {
+      const id = parseInt(req.params.id);
+      const categoryData = req.body;
+      const category = await storage.updateCategory(id, categoryData);
+      if (!category) {
+        return res.status(404).json({ message: "Category not found" });
+      }
+      res.json(category);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update category" });
+    }
+  });
+
+  // Delete category
+  app.delete("/api/categories/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const success = await storage.deleteCategory(id);
+      if (!success) {
+        return res.status(404).json({ message: "Category not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete category" });
+    }
+  });
+
+  // Get tasks
+  app.get("/api/tasks", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
       const { categoryId, completed, date } = req.query;
       const filters = {
         categoryId: categoryId ? parseInt(categoryId as string) : undefined,
@@ -93,71 +137,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
         date: date as string,
       };
       
-      const tasks = await storage.getTasks(1, filters);
+      const tasks = await storage.getTasks(userId, filters);
       res.json(tasks);
     } catch (error) {
-      res.status(500).json({ message: "Failed to get tasks" });
+      console.error("Error fetching tasks:", error);
+      res.status(500).json({ message: "Failed to fetch tasks" });
     }
   });
 
-  app.post("/api/tasks", async (req, res) => {
+  // Create task
+  app.post("/api/tasks", isAuthenticated, async (req: any, res) => {
     try {
-      const taskData = { ...req.body, userId: 1 };
-      const validatedData = insertTaskSchema.parse(taskData);
-      const task = await storage.createTask(validatedData);
-      res.json(task);
+      const userId = req.user.claims.sub;
+      const taskData = insertTaskSchema.parse({
+        ...req.body,
+        userId,
+      });
+      const task = await storage.createTask(taskData);
+      res.status(201).json(task);
     } catch (error) {
+      console.error("Error creating task:", error);
       res.status(500).json({ message: "Failed to create task" });
     }
   });
 
-  app.patch("/api/tasks/:id", async (req, res) => {
+  // Update task
+  app.put("/api/tasks/:id", isAuthenticated, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
-      const task = await storage.updateTask(id, req.body);
-      
+      const taskData = req.body;
+      const task = await storage.updateTask(id, taskData);
       if (!task) {
         return res.status(404).json({ message: "Task not found" });
       }
-      
       res.json(task);
     } catch (error) {
       res.status(500).json({ message: "Failed to update task" });
     }
   });
 
-  app.delete("/api/tasks/:id", async (req, res) => {
+  // Delete task
+  app.delete("/api/tasks/:id", isAuthenticated, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
-      const deleted = await storage.deleteTask(id);
-      
-      if (!deleted) {
+      const success = await storage.deleteTask(id);
+      if (!success) {
         return res.status(404).json({ message: "Task not found" });
       }
-      
-      res.json({ success: true });
+      res.status(204).send();
     } catch (error) {
       res.status(500).json({ message: "Failed to delete task" });
     }
   });
 
-  app.post("/api/tasks/:id/complete", async (req, res) => {
+  // Complete task
+  app.post("/api/tasks/:id/complete", isAuthenticated, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
       const task = await storage.completeTask(id);
-      
       if (!task) {
         return res.status(404).json({ message: "Task not found" });
       }
       
-      // Create activity
-      const activityData = {
-        userId: 1,
+      // Create activity for task completion
+      await storage.createActivity({
+        userId: task.userId,
         text: `Completed '${task.title}' task`,
-        type: "task_completed" as const,
-      };
-      const validatedActivity = insertActivitySchema.parse(activityData);
-      await storage.createActivity(validatedActivity);
+        type: "task_completed",
+      });
       
       res.json(task);
     } catch (error) {
