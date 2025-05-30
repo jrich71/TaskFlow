@@ -396,7 +396,7 @@ export default function Dashboard() {
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" />
-                <YAxis />
+                <YAxis allowDecimals={false} />
                 <Tooltip />
                 <Line 
                   type="monotone" 
