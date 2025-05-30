@@ -64,14 +64,14 @@ export default function Dashboard() {
     queryKey: ["/api/user/activities"],
   });
 
-  // Fetch heatmap data for the last 30 days for the progress chart
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  // Fetch heatmap data for the last 7 days for the progress chart
+  const sevenDaysAgo = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   const today = new Date().toISOString().split('T')[0];
   
   const { data: heatmapData } = useQuery({
-    queryKey: ["/api/user/heatmap", thirtyDaysAgo, today],
+    queryKey: ["/api/user/heatmap", sevenDaysAgo, today],
     queryFn: async () => {
-      const response = await fetch(`/api/user/heatmap?startDate=${thirtyDaysAgo}&endDate=${today}`, {
+      const response = await fetch(`/api/user/heatmap?startDate=${sevenDaysAgo}&endDate=${today}`, {
         credentials: 'include'
       });
       if (!response.ok) return [];
@@ -389,7 +389,7 @@ export default function Dashboard() {
         <Card className="p-6 mb-8">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-foreground">Progress Overview</h3>
-            <p className="text-sm text-muted-foreground">Last 30 days</p>
+            <p className="text-sm text-muted-foreground">Last 7 days</p>
           </div>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
