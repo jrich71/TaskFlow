@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, decimal, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -8,50 +8,30 @@ export const users = pgTable("users", {
   lastName: text("last_name").notNull(),
   email: text("email").notNull().unique(),
   profileImage: text("profile_image"),
-  activeClasses: integer("active_classes").default(0),
-  hoursThisWeek: integer("hours_this_week").default(0),
-  streak: integer("streak").default(0),
+  currentStreak: integer("current_streak").default(0),
+  longestStreak: integer("longest_streak").default(0),
+  totalPoints: integer("total_points").default(0),
+  lastTaskDate: text("last_task_date"), // stored as YYYY-MM-DD
 });
 
-export const instructors = pgTable("instructors", {
-  id: serial("id").primaryKey(),
-  firstName: text("first_name").notNull(),
-  lastName: text("last_name").notNull(),
-  profileImage: text("profile_image"),
-  rating: decimal("rating", { precision: 2, scale: 1 }),
-  reviewCount: integer("review_count").default(0),
-});
-
-export const languages = pgTable("languages", {
+export const categories = pgTable("categories", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  code: text("code").notNull(),
+  color: text("color").notNull(),
+  userId: integer("user_id").notNull(),
 });
 
-export const classes = pgTable("classes", {
+export const tasks = pgTable("tasks", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
   description: text("description"),
-  instructorId: integer("instructor_id").notNull(),
-  languageId: integer("language_id").notNull(),
-  level: text("level").notNull(), // Beginner, Intermediate, Advanced
-  duration: integer("duration").notNull(), // in minutes
-  price: decimal("price", { precision: 10, scale: 2 }).notNull(),
-  maxStudents: integer("max_students").notNull(),
-  currentStudents: integer("current_students").default(0),
-  distance: decimal("distance", { precision: 3, scale: 1 }), // in miles
-  nextSession: timestamp("next_session"),
-  status: text("status").default("available"), // available, few_spots, full
-  rating: decimal("rating", { precision: 2, scale: 1 }),
-  reviewCount: integer("review_count").default(0),
-});
-
-export const bookings = pgTable("bookings", {
-  id: serial("id").primaryKey(),
+  categoryId: integer("category_id"),
   userId: integer("user_id").notNull(),
-  classId: integer("class_id").notNull(),
-  sessionDate: timestamp("session_date").notNull(),
-  status: text("status").default("booked"), // booked, completed, cancelled
+  startDate: text("start_date"), // stored as YYYY-MM-DD
+  dueDate: text("due_date"), // stored as YYYY-MM-DD
+  completed: boolean("completed").default(false),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const activities = pgTable("activities", {
@@ -59,7 +39,7 @@ export const activities = pgTable("activities", {
   userId: integer("user_id").notNull(),
   text: text("text").notNull(),
   timestamp: timestamp("timestamp").defaultNow(),
-  type: text("type").notNull(), // completed, booked, achievement
+  type: text("type").notNull(), // task_completed, streak_milestone, category_created
 });
 
 // Insert schemas
@@ -67,20 +47,13 @@ export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
 });
 
-export const insertInstructorSchema = createInsertSchema(instructors).omit({
+export const insertCategorySchema = createInsertSchema(categories).omit({
   id: true,
 });
 
-export const insertLanguageSchema = createInsertSchema(languages).omit({
+export const insertTaskSchema = createInsertSchema(tasks).omit({
   id: true,
-});
-
-export const insertClassSchema = createInsertSchema(classes).omit({
-  id: true,
-});
-
-export const insertBookingSchema = createInsertSchema(bookings).omit({
-  id: true,
+  createdAt: true,
 });
 
 export const insertActivitySchema = createInsertSchema(activities).omit({
@@ -91,30 +64,28 @@ export const insertActivitySchema = createInsertSchema(activities).omit({
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 
-export type Instructor = typeof instructors.$inferSelect;
-export type InsertInstructor = z.infer<typeof insertInstructorSchema>;
+export type Category = typeof categories.$inferSelect;
+export type InsertCategory = z.infer<typeof insertCategorySchema>;
 
-export type Language = typeof languages.$inferSelect;
-export type InsertLanguage = z.infer<typeof insertLanguageSchema>;
-
-export type Class = typeof classes.$inferSelect;
-export type InsertClass = z.infer<typeof insertClassSchema>;
-
-export type Booking = typeof bookings.$inferSelect;
-export type InsertBooking = z.infer<typeof insertBookingSchema>;
+export type Task = typeof tasks.$inferSelect;
+export type InsertTask = z.infer<typeof insertTaskSchema>;
 
 export type Activity = typeof activities.$inferSelect;
 export type InsertActivity = z.infer<typeof insertActivitySchema>;
 
 // Extended types for API responses
-export type ClassWithDetails = Class & {
-  instructor: Instructor;
-  language: Language;
+export type TaskWithCategory = Task & {
+  category?: Category;
 };
 
 export type UserStats = {
-  activeClasses: number;
-  hoursThisWeek: number;
-  streak: string;
-  availableClasses: number;
+  tasksToday: number;
+  upcomingTasks: number;
+  currentStreak: number;
+  totalPoints: number;
+};
+
+export type HeatmapData = {
+  date: string; // YYYY-MM-DD format
+  count: number;
 };

@@ -1,24 +1,19 @@
 import { 
-  users, 
-  instructors, 
-  languages, 
-  classes, 
-  bookings, 
+  users,
+  categories,
+  tasks,
   activities,
   type User, 
   type InsertUser,
-  type Instructor,
-  type InsertInstructor,
-  type Language,
-  type InsertLanguage,
-  type Class,
-  type InsertClass,
-  type Booking,
-  type InsertBooking,
+  type Category,
+  type InsertCategory,
+  type Task,
+  type InsertTask,
   type Activity,
   type InsertActivity,
-  type ClassWithDetails,
-  type UserStats
+  type TaskWithCategory,
+  type UserStats,
+  type HeatmapData
 } from "@shared/schema";
 
 export interface IStorage {
@@ -28,23 +23,19 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined>;
   
-  // Classes
-  getClasses(filters?: { language?: string; level?: string; timeOfDay?: string }): Promise<ClassWithDetails[]>;
-  getClass(id: number): Promise<ClassWithDetails | undefined>;
-  createClass(classData: InsertClass): Promise<Class>;
-  updateClass(id: number, classData: Partial<InsertClass>): Promise<Class | undefined>;
+  // Categories
+  getCategories(userId: number): Promise<Category[]>;
+  createCategory(category: InsertCategory): Promise<Category>;
+  updateCategory(id: number, category: Partial<InsertCategory>): Promise<Category | undefined>;
+  deleteCategory(id: number): Promise<boolean>;
   
-  // Instructors
-  getInstructor(id: number): Promise<Instructor | undefined>;
-  createInstructor(instructor: InsertInstructor): Promise<Instructor>;
-  
-  // Languages
-  getLanguages(): Promise<Language[]>;
-  createLanguage(language: InsertLanguage): Promise<Language>;
-  
-  // Bookings
-  getUserBookings(userId: number): Promise<(Booking & { class: ClassWithDetails })[]>;
-  createBooking(booking: InsertBooking): Promise<Booking>;
+  // Tasks
+  getTasks(userId: number, filters?: { categoryId?: number; completed?: boolean; date?: string }): Promise<TaskWithCategory[]>;
+  getTask(id: number): Promise<TaskWithCategory | undefined>;
+  createTask(task: InsertTask): Promise<Task>;
+  updateTask(id: number, task: Partial<InsertTask>): Promise<Task | undefined>;
+  deleteTask(id: number): Promise<boolean>;
+  completeTask(id: number): Promise<Task | undefined>;
   
   // Activities
   getUserActivities(userId: number): Promise<Activity[]>;
@@ -52,30 +43,25 @@ export interface IStorage {
   
   // Stats
   getUserStats(userId: number): Promise<UserStats>;
+  getHeatmapData(userId: number, startDate: string, endDate: string): Promise<HeatmapData[]>;
 }
 
 export class MemStorage implements IStorage {
   private users: Map<number, User>;
-  private instructors: Map<number, Instructor>;
-  private languages: Map<number, Language>;
-  private classes: Map<number, Class>;
-  private bookings: Map<number, Booking>;
+  private categories: Map<number, Category>;
+  private tasks: Map<number, Task>;
   private activities: Map<number, Activity>;
   private currentId: { [key: string]: number };
 
   constructor() {
     this.users = new Map();
-    this.instructors = new Map();
-    this.languages = new Map();
-    this.classes = new Map();
-    this.bookings = new Map();
+    this.categories = new Map();
+    this.tasks = new Map();
     this.activities = new Map();
     this.currentId = {
       users: 1,
-      instructors: 1,
-      languages: 1,
-      classes: 1,
-      bookings: 1,
+      categories: 1,
+      tasks: 1,
       activities: 1,
     };
 
@@ -83,205 +69,198 @@ export class MemStorage implements IStorage {
   }
 
   private seedData() {
-    // Seed languages
-    const spanish = this.createLanguageSync({ name: "Spanish", code: "es" });
-    const french = this.createLanguageSync({ name: "French", code: "fr" });
-    const japanese = this.createLanguageSync({ name: "Japanese", code: "ja" });
-    const german = this.createLanguageSync({ name: "German", code: "de" });
-    const mandarin = this.createLanguageSync({ name: "Mandarin", code: "zh" });
-
-    // Seed instructors
-    const carlos = this.createInstructorSync({
-      firstName: "Carlos",
-      lastName: "Rodriguez",
-      profileImage: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=48&h=48",
-      rating: "4.9",
-      reviewCount: 23,
-    });
-
-    const marie = this.createInstructorSync({
-      firstName: "Marie",
-      lastName: "Dubois",
-      profileImage: "https://images.unsplash.com/photo-1494790108755-2616b612b093?ixlib=rb-4.0.3&auto=format&fit=crop&w=48&h=48",
-      rating: "4.8",
-      reviewCount: 31,
-    });
-
-    const kenji = this.createInstructorSync({
-      firstName: "Kenji",
-      lastName: "Tanaka",
-      profileImage: "https://images.unsplash.com/photo-1556474835-b0f3ac40d4d1?ixlib=rb-4.0.3&auto=format&fit=crop&w=48&h=48",
-      rating: "5.0",
-      reviewCount: 18,
-    });
-
-    const anna = this.createInstructorSync({
-      firstName: "Anna",
-      lastName: "Mueller",
-      profileImage: "https://images.unsplash.com/photo-1551836022-deb4988cc6c0?ixlib=rb-4.0.3&auto=format&fit=crop&w=48&h=48",
-      rating: "4.7",
-      reviewCount: 15,
-    });
-
-    const liWei = this.createInstructorSync({
-      firstName: "Li",
-      lastName: "Wei",
-      profileImage: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=48&h=48",
-      rating: "4.9",
-      reviewCount: 27,
-    });
-
-    // Seed classes
-    this.createClassSync({
-      title: "Spanish Conversation Practice",
-      description: "Improve your conversational Spanish skills in a friendly environment",
-      instructorId: carlos.id,
-      languageId: spanish.id,
-      level: "Intermediate",
-      duration: 90,
-      price: "25.00",
-      maxStudents: 8,
-      currentStudents: 3,
-      distance: "0.8",
-      nextSession: new Date(Date.now() + 2 * 60 * 60 * 1000), // 2 hours from now
-      status: "available",
-      rating: "4.9",
-      reviewCount: 23,
-    });
-
-    this.createClassSync({
-      title: "French Grammar Intensive",
-      description: "Master French grammar fundamentals",
-      instructorId: marie.id,
-      languageId: french.id,
-      level: "Beginner",
-      duration: 120,
-      price: "35.00",
-      maxStudents: 10,
-      currentStudents: 6,
-      distance: "1.2",
-      nextSession: new Date(Date.now() + 26 * 60 * 60 * 1000), // Tomorrow 2PM
-      status: "available",
-      rating: "4.8",
-      reviewCount: 31,
-    });
-
-    this.createClassSync({
-      title: "Japanese for Beginners",
-      description: "Start your Japanese learning journey",
-      instructorId: kenji.id,
-      languageId: japanese.id,
-      level: "Beginner",
-      duration: 60,
-      price: "30.00",
-      maxStudents: 6,
-      currentStudents: 2,
-      distance: "2.1",
-      nextSession: new Date(Date.now() + 50 * 60 * 60 * 1000), // Wed 6:30PM
-      status: "few_spots",
-      rating: "5.0",
-      reviewCount: 18,
-    });
-
-    this.createClassSync({
-      title: "German Basics",
-      description: "Learn German fundamentals",
-      instructorId: anna.id,
-      languageId: german.id,
-      level: "Beginner",
-      duration: 75,
-      price: "28.00",
-      maxStudents: 8,
-      currentStudents: 4,
-      distance: "1.5",
-      nextSession: new Date(Date.now() + 26 * 60 * 60 * 1000), // Thursday 2PM
-      status: "available",
-      rating: "4.7",
-      reviewCount: 15,
-    });
-
-    this.createClassSync({
-      title: "Mandarin Workshop",
-      description: "Intensive Mandarin practice session",
-      instructorId: liWei.id,
-      languageId: mandarin.id,
-      level: "Intermediate",
-      duration: 180,
-      price: "50.00",
-      maxStudents: 12,
-      currentStudents: 8,
-      distance: "3.2",
-      nextSession: new Date(Date.now() + 122 * 60 * 60 * 1000), // Saturday 10AM
-      status: "available",
-      rating: "4.9",
-      reviewCount: 27,
-    });
-
     // Seed user
     const user = this.createUserSync({
-      firstName: "Alex",
-      lastName: "Chen",
-      email: "alex.chen@example.com",
-      profileImage: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=32&h=32",
-      activeClasses: 3,
-      hoursThisWeek: 12,
-      streak: 7,
+      firstName: "Sarah",
+      lastName: "Johnson",
+      email: "sarah.johnson@example.com",
+      profileImage: "https://images.unsplash.com/photo-1494790108755-2616b612b093?ixlib=rb-4.0.3&auto=format&fit=crop&w=32&h=32",
+      currentStreak: 7,
+      longestStreak: 14,
+      totalPoints: 150,
+      lastTaskDate: new Date().toISOString().split('T')[0], // Today
+    });
+
+    // Seed categories
+    const workCategory = this.createCategorySync({
+      name: "Work",
+      color: "#3B82F6", // Blue
+      userId: user.id,
+    });
+
+    const personalCategory = this.createCategorySync({
+      name: "Personal",
+      color: "#10B981", // Green
+      userId: user.id,
+    });
+
+    const healthCategory = this.createCategorySync({
+      name: "Health",
+      color: "#F59E0B", // Amber
+      userId: user.id,
+    });
+
+    const learningCategory = this.createCategorySync({
+      name: "Learning",
+      color: "#8B5CF6", // Purple
+      userId: user.id,
+    });
+
+    // Seed tasks
+    const today = new Date().toISOString().split('T')[0];
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    // Today's tasks
+    this.createTaskSync({
+      title: "Review project proposal",
+      description: "Go through the Q4 proposal and provide feedback",
+      categoryId: workCategory.id,
+      userId: user.id,
+      startDate: today,
+      dueDate: today,
+      completed: true,
+      completedAt: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
+    });
+
+    this.createTaskSync({
+      title: "Morning workout",
+      description: "30-minute cardio session",
+      categoryId: healthCategory.id,
+      userId: user.id,
+      startDate: today,
+      dueDate: today,
+      completed: true,
+      completedAt: new Date(Date.now() - 6 * 60 * 60 * 1000), // 6 hours ago
+    });
+
+    this.createTaskSync({
+      title: "Call dentist for appointment",
+      description: "Schedule cleaning appointment for next month",
+      categoryId: personalCategory.id,
+      userId: user.id,
+      startDate: today,
+      dueDate: today,
+      completed: false,
+    });
+
+    // Tomorrow's tasks
+    this.createTaskSync({
+      title: "Team standup meeting",
+      description: "Daily team sync at 9:00 AM",
+      categoryId: workCategory.id,
+      userId: user.id,
+      startDate: tomorrow,
+      dueDate: tomorrow,
+      completed: false,
+    });
+
+    this.createTaskSync({
+      title: "Grocery shopping",
+      description: "Buy ingredients for weekend dinner party",
+      categoryId: personalCategory.id,
+      userId: user.id,
+      startDate: tomorrow,
+      dueDate: tomorrow,
+      completed: false,
+    });
+
+    // Next week's tasks
+    this.createTaskSync({
+      title: "Complete React course module",
+      description: "Finish the advanced hooks chapter",
+      categoryId: learningCategory.id,
+      userId: user.id,
+      startDate: nextWeek,
+      dueDate: nextWeek,
+      completed: false,
+    });
+
+    this.createTaskSync({
+      title: "Quarterly review presentation",
+      description: "Prepare slides for Q4 performance review",
+      categoryId: workCategory.id,
+      userId: user.id,
+      startDate: nextWeek,
+      dueDate: nextWeek,
+      completed: false,
     });
 
     // Seed user activities
     this.createActivitySync({
       userId: user.id,
-      text: "Completed Spanish Conversation class",
-      type: "completed",
+      text: "Completed 'Review project proposal' task",
+      type: "task_completed",
       timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
     });
 
     this.createActivitySync({
       userId: user.id,
-      text: "Booked German Basics for Thursday",
-      type: "booked",
+      text: "Completed 'Morning workout' task",
+      type: "task_completed",
+      timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000),
+    });
+
+    this.createActivitySync({
+      userId: user.id,
+      text: "Reached 7-day streak milestone!",
+      type: "streak_milestone",
       timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000),
     });
 
     this.createActivitySync({
       userId: user.id,
-      text: 'Earned "Week Warrior" achievement',
-      type: "achievement",
+      text: "Created new category 'Learning'",
+      type: "category_created",
       timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
     });
   }
 
   private createUserSync(user: InsertUser): User {
     const id = this.currentId.users++;
-    const newUser: User = { ...user, id };
+    const newUser: User = { 
+      ...user, 
+      id,
+      profileImage: user.profileImage || null,
+      currentStreak: user.currentStreak || null,
+      longestStreak: user.longestStreak || null,
+      totalPoints: user.totalPoints || null,
+      lastTaskDate: user.lastTaskDate || null
+    };
     this.users.set(id, newUser);
     return newUser;
   }
 
-  private createInstructorSync(instructor: InsertInstructor): Instructor {
-    const id = this.currentId.instructors++;
-    const newInstructor: Instructor = { ...instructor, id };
-    this.instructors.set(id, newInstructor);
-    return newInstructor;
+  private createCategorySync(category: InsertCategory): Category {
+    const id = this.currentId.categories++;
+    const newCategory: Category = { ...category, id };
+    this.categories.set(id, newCategory);
+    return newCategory;
   }
 
-  private createLanguageSync(language: InsertLanguage): Language {
-    const id = this.currentId.languages++;
-    const newLanguage: Language = { ...language, id };
-    this.languages.set(id, newLanguage);
-    return newLanguage;
-  }
-
-  private createClassSync(classData: InsertClass): Class {
-    const id = this.currentId.classes++;
-    const newClass: Class = { ...classData, id };
-    this.classes.set(id, newClass);
-    return newClass;
+  private createTaskSync(task: InsertTask): Task {
+    const id = this.currentId.tasks++;
+    const newTask: Task = { 
+      ...task, 
+      id,
+      createdAt: new Date(),
+      profileImage: task.profileImage || null,
+      currentStreak: task.currentStreak || null,
+      longestStreak: task.longestStreak || null,
+      totalPoints: task.totalPoints || null,
+      lastTaskDate: task.lastTaskDate || null
+    };
+    this.tasks.set(id, newTask);
+    return newTask;
   }
 
   private createActivitySync(activity: InsertActivity): Activity {
     const id = this.currentId.activities++;
-    const newActivity: Activity = { ...activity, id };
+    const newActivity: Activity = { 
+      ...activity, 
+      id,
+      timestamp: activity.timestamp || new Date()
+    };
     this.activities.set(id, newActivity);
     return newActivity;
   }
@@ -307,99 +286,119 @@ export class MemStorage implements IStorage {
     return updatedUser;
   }
 
-  async getClasses(filters?: { language?: string; level?: string; timeOfDay?: string }): Promise<ClassWithDetails[]> {
-    let classArray = Array.from(this.classes.values());
+  // Categories
+  async getCategories(userId: number): Promise<Category[]> {
+    return Array.from(this.categories.values()).filter(c => c.userId === userId);
+  }
+
+  async createCategory(category: InsertCategory): Promise<Category> {
+    return this.createCategorySync(category);
+  }
+
+  async updateCategory(id: number, category: Partial<InsertCategory>): Promise<Category | undefined> {
+    const existingCategory = this.categories.get(id);
+    if (!existingCategory) return undefined;
     
-    if (filters?.level) {
-      classArray = classArray.filter(c => c.level.toLowerCase() === filters.level?.toLowerCase());
+    const updatedCategory = { ...existingCategory, ...category };
+    this.categories.set(id, updatedCategory);
+    return updatedCategory;
+  }
+
+  async deleteCategory(id: number): Promise<boolean> {
+    return this.categories.delete(id);
+  }
+
+  // Tasks
+  async getTasks(userId: number, filters?: { categoryId?: number; completed?: boolean; date?: string }): Promise<TaskWithCategory[]> {
+    let userTasks = Array.from(this.tasks.values()).filter(t => t.userId === userId);
+    
+    if (filters?.categoryId) {
+      userTasks = userTasks.filter(t => t.categoryId === filters.categoryId);
     }
     
-    return classArray.map(classItem => {
-      const instructor = this.instructors.get(classItem.instructorId)!;
-      const language = this.languages.get(classItem.languageId)!;
+    if (filters?.completed !== undefined) {
+      userTasks = userTasks.filter(t => t.completed === filters.completed);
+    }
+    
+    if (filters?.date) {
+      userTasks = userTasks.filter(t => t.dueDate === filters.date);
+    }
+    
+    return userTasks.map(task => {
+      const category = task.categoryId ? this.categories.get(task.categoryId) : undefined;
       return {
-        ...classItem,
-        instructor,
-        language,
+        ...task,
+        category,
       };
     });
   }
 
-  async getClass(id: number): Promise<ClassWithDetails | undefined> {
-    const classItem = this.classes.get(id);
-    if (!classItem) return undefined;
+  async getTask(id: number): Promise<TaskWithCategory | undefined> {
+    const task = this.tasks.get(id);
+    if (!task) return undefined;
     
-    const instructor = this.instructors.get(classItem.instructorId)!;
-    const language = this.languages.get(classItem.languageId)!;
-    
+    const category = task.categoryId ? this.categories.get(task.categoryId) : undefined;
     return {
-      ...classItem,
-      instructor,
-      language,
+      ...task,
+      category,
     };
   }
 
-  async createClass(classData: InsertClass): Promise<Class> {
-    return this.createClassSync(classData);
+  async createTask(task: InsertTask): Promise<Task> {
+    return this.createTaskSync(task);
   }
 
-  async updateClass(id: number, classData: Partial<InsertClass>): Promise<Class | undefined> {
-    const classItem = this.classes.get(id);
-    if (!classItem) return undefined;
+  async updateTask(id: number, task: Partial<InsertTask>): Promise<Task | undefined> {
+    const existingTask = this.tasks.get(id);
+    if (!existingTask) return undefined;
     
-    const updatedClass = { ...classItem, ...classData };
-    this.classes.set(id, updatedClass);
-    return updatedClass;
+    const updatedTask = { ...existingTask, ...task };
+    this.tasks.set(id, updatedTask);
+    return updatedTask;
   }
 
-  async getInstructor(id: number): Promise<Instructor | undefined> {
-    return this.instructors.get(id);
+  async deleteTask(id: number): Promise<boolean> {
+    return this.tasks.delete(id);
   }
 
-  async createInstructor(instructor: InsertInstructor): Promise<Instructor> {
-    return this.createInstructorSync(instructor);
-  }
-
-  async getLanguages(): Promise<Language[]> {
-    return Array.from(this.languages.values());
-  }
-
-  async createLanguage(language: InsertLanguage): Promise<Language> {
-    return this.createLanguageSync(language);
-  }
-
-  async getUserBookings(userId: number): Promise<(Booking & { class: ClassWithDetails })[]> {
-    const userBookings = Array.from(this.bookings.values()).filter(b => b.userId === userId);
+  async completeTask(id: number): Promise<Task | undefined> {
+    const task = this.tasks.get(id);
+    if (!task) return undefined;
     
-    return userBookings.map(booking => {
-      const classItem = this.classes.get(booking.classId)!;
-      const instructor = this.instructors.get(classItem.instructorId)!;
-      const language = this.languages.get(classItem.languageId)!;
+    const completedTask = { 
+      ...task, 
+      completed: true, 
+      completedAt: new Date() 
+    };
+    this.tasks.set(id, completedTask);
+    
+    // Update user streak and points
+    const user = this.users.get(task.userId);
+    if (user) {
+      const today = new Date().toISOString().split('T')[0];
+      const lastTaskDate = user.lastTaskDate;
       
-      return {
-        ...booking,
-        class: {
-          ...classItem,
-          instructor,
-          language,
-        },
+      let newStreak = user.currentStreak || 0;
+      if (lastTaskDate !== today) {
+        const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        if (lastTaskDate === yesterday) {
+          newStreak += 1;
+        } else {
+          newStreak = 1;
+        }
+      }
+      
+      const updatedUser = {
+        ...user,
+        currentStreak: newStreak,
+        longestStreak: Math.max(user.longestStreak || 0, newStreak),
+        totalPoints: (user.totalPoints || 0) + 1,
+        lastTaskDate: today,
       };
-    });
-  }
-
-  async createBooking(booking: InsertBooking): Promise<Booking> {
-    const id = this.currentId.bookings++;
-    const newBooking: Booking = { ...booking, id };
-    this.bookings.set(id, newBooking);
-    
-    // Update class current students
-    const classItem = this.classes.get(booking.classId);
-    if (classItem) {
-      const updatedClass = { ...classItem, currentStudents: classItem.currentStudents + 1 };
-      this.classes.set(booking.classId, updatedClass);
+      this.users.set(task.userId, updatedUser);
     }
     
-    return newBooking;
+    return completedTask;
   }
 
   async getUserActivities(userId: number): Promise<Activity[]> {
@@ -414,14 +413,54 @@ export class MemStorage implements IStorage {
 
   async getUserStats(userId: number): Promise<UserStats> {
     const user = this.users.get(userId);
-    const totalClasses = Array.from(this.classes.values()).length;
+    const tasks = Array.from(this.tasks.values()).filter(t => t.userId === userId);
+    
+    const today = new Date().toISOString().split('T')[0];
+    const tasksToday = tasks.filter(t => t.dueDate === today && !t.completed).length;
+    
+    const next7Days = Array.from({ length: 7 }, (_, i) => {
+      const date = new Date(Date.now() + i * 24 * 60 * 60 * 1000);
+      return date.toISOString().split('T')[0];
+    });
+    const upcomingTasks = tasks.filter(t => 
+      t.dueDate && next7Days.includes(t.dueDate) && !t.completed
+    ).length;
     
     return {
-      activeClasses: user?.activeClasses || 0,
-      hoursThisWeek: user?.hoursThisWeek || 0,
-      streak: `${user?.streak || 0} days`,
-      availableClasses: totalClasses,
+      tasksToday,
+      upcomingTasks,
+      currentStreak: user?.currentStreak || 0,
+      totalPoints: user?.totalPoints || 0,
     };
+  }
+
+  async getHeatmapData(userId: number, startDate: string, endDate: string): Promise<HeatmapData[]> {
+    const tasks = Array.from(this.tasks.values()).filter(t => 
+      t.userId === userId && t.completed && t.completedAt
+    );
+    
+    const dateMap = new Map<string, number>();
+    
+    tasks.forEach(task => {
+      if (task.completedAt) {
+        const date = task.completedAt.toISOString().split('T')[0];
+        dateMap.set(date, (dateMap.get(date) || 0) + 1);
+      }
+    });
+    
+    const result: HeatmapData[] = [];
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().split('T')[0];
+      result.push({
+        date: dateStr,
+        count: dateMap.get(dateStr) || 0,
+      });
+    }
+    
+    return result;
   }
 }
 

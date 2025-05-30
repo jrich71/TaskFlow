@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertBookingSchema, insertActivitySchema } from "@shared/schema";
+import { insertTaskSchema, insertCategorySchema, insertActivitySchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Get current user (mock user with ID 1)
@@ -27,90 +27,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get all classes with optional filters
-  app.get("/api/classes", async (req, res) => {
-    try {
-      const { language, level, timeOfDay } = req.query;
-      const filters = {
-        language: language as string,
-        level: level as string,
-        timeOfDay: timeOfDay as string,
-      };
-      
-      const classes = await storage.getClasses(filters);
-      res.json(classes);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to get classes" });
-    }
-  });
-
-  // Get specific class
-  app.get("/api/classes/:id", async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const classItem = await storage.getClass(id);
-      
-      if (!classItem) {
-        return res.status(404).json({ message: "Class not found" });
-      }
-      
-      res.json(classItem);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to get class" });
-    }
-  });
-
-  // Book a class
-  app.post("/api/classes/:id/book", async (req, res) => {
-    try {
-      const classId = parseInt(req.params.id);
-      const userId = 1; // Mock user ID
-      
-      const classItem = await storage.getClass(classId);
-      if (!classItem) {
-        return res.status(404).json({ message: "Class not found" });
-      }
-      
-      if (classItem.currentStudents >= classItem.maxStudents) {
-        return res.status(400).json({ message: "Class is full" });
-      }
-      
-      const bookingData = {
-        userId,
-        classId,
-        sessionDate: classItem.nextSession!,
-        status: "booked" as const,
-      };
-      
-      const validatedData = insertBookingSchema.parse(bookingData);
-      const booking = await storage.createBooking(validatedData);
-      
-      // Create activity
-      const activityData = {
-        userId,
-        text: `Booked ${classItem.title}`,
-        type: "booked" as const,
-      };
-      
-      const validatedActivity = insertActivitySchema.parse(activityData);
-      await storage.createActivity(validatedActivity);
-      
-      res.json(booking);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to book class" });
-    }
-  });
-
-  // Get user bookings
-  app.get("/api/user/bookings", async (req, res) => {
-    try {
-      const bookings = await storage.getUserBookings(1);
-      res.json(bookings);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to get bookings" });
-    }
-  });
-
   // Get user activities
   app.get("/api/user/activities", async (req, res) => {
     try {
@@ -121,13 +37,131 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get all languages
-  app.get("/api/languages", async (req, res) => {
+  // Get heatmap data
+  app.get("/api/user/heatmap", async (req, res) => {
     try {
-      const languages = await storage.getLanguages();
-      res.json(languages);
+      const { startDate, endDate } = req.query;
+      const heatmapData = await storage.getHeatmapData(
+        1, 
+        startDate as string || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        endDate as string || new Date().toISOString().split('T')[0]
+      );
+      res.json(heatmapData);
     } catch (error) {
-      res.status(500).json({ message: "Failed to get languages" });
+      res.status(500).json({ message: "Failed to get heatmap data" });
+    }
+  });
+
+  // Categories routes
+  app.get("/api/categories", async (req, res) => {
+    try {
+      const categories = await storage.getCategories(1);
+      res.json(categories);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get categories" });
+    }
+  });
+
+  app.post("/api/categories", async (req, res) => {
+    try {
+      const categoryData = { ...req.body, userId: 1 };
+      const validatedData = insertCategorySchema.parse(categoryData);
+      const category = await storage.createCategory(validatedData);
+      
+      // Create activity
+      const activityData = {
+        userId: 1,
+        text: `Created new category '${category.name}'`,
+        type: "category_created" as const,
+      };
+      const validatedActivity = insertActivitySchema.parse(activityData);
+      await storage.createActivity(validatedActivity);
+      
+      res.json(category);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create category" });
+    }
+  });
+
+  // Tasks routes
+  app.get("/api/tasks", async (req, res) => {
+    try {
+      const { categoryId, completed, date } = req.query;
+      const filters = {
+        categoryId: categoryId ? parseInt(categoryId as string) : undefined,
+        completed: completed ? completed === 'true' : undefined,
+        date: date as string,
+      };
+      
+      const tasks = await storage.getTasks(1, filters);
+      res.json(tasks);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get tasks" });
+    }
+  });
+
+  app.post("/api/tasks", async (req, res) => {
+    try {
+      const taskData = { ...req.body, userId: 1 };
+      const validatedData = insertTaskSchema.parse(taskData);
+      const task = await storage.createTask(validatedData);
+      res.json(task);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create task" });
+    }
+  });
+
+  app.patch("/api/tasks/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const task = await storage.updateTask(id, req.body);
+      
+      if (!task) {
+        return res.status(404).json({ message: "Task not found" });
+      }
+      
+      res.json(task);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update task" });
+    }
+  });
+
+  app.delete("/api/tasks/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteTask(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ message: "Task not found" });
+      }
+      
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete task" });
+    }
+  });
+
+  app.post("/api/tasks/:id/complete", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const task = await storage.completeTask(id);
+      
+      if (!task) {
+        return res.status(404).json({ message: "Task not found" });
+      }
+      
+      // Create activity
+      const activityData = {
+        userId: 1,
+        text: `Completed '${task.title}' task`,
+        type: "task_completed" as const,
+      };
+      const validatedActivity = insertActivitySchema.parse(activityData);
+      await storage.createActivity(validatedActivity);
+      
+      res.json(task);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to complete task" });
     }
   });
 
