@@ -1,10 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Plus, Calendar, CheckCircle2, Circle, Trash2 } from "lucide-react";
-import { TaskWithCategory, UserStats, Category } from "@shared/schema";
+import { Plus, Calendar, CheckCircle2, Circle, Trash2, LogOut } from "lucide-react";
+import { TaskWithCategory, UserStats, Category, User } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -12,11 +17,18 @@ import { useToast } from "@/hooks/use-toast";
 export default function Dashboard() {
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
+  const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
+  const [newTask, setNewTask] = useState({
+    title: "",
+    description: "",
+    categoryId: "",
+    dueDate: "",
+  });
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const { data: user } = useQuery({
-    queryKey: ["/api/user"],
+  const { data: user } = useQuery<User>({
+    queryKey: ["/api/auth/user"],
   });
 
   const { data: stats } = useQuery<UserStats>({
@@ -57,6 +69,27 @@ export default function Dashboard() {
     },
   });
 
+  const createTaskMutation = useMutation({
+    mutationFn: (taskData: any) => apiRequest("POST", "/api/tasks", taskData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/stats"] });
+      setIsCreateTaskOpen(false);
+      setNewTask({ title: "", description: "", categoryId: "", dueDate: "" });
+      toast({
+        title: "Task created!",
+        description: "Your new task has been added successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to create task. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const deleteTaskMutation = useMutation({
     mutationFn: (taskId: number) => apiRequest("DELETE", `/api/tasks/${taskId}`),
     onSuccess: () => {
@@ -67,6 +100,26 @@ export default function Dashboard() {
       });
     },
   });
+
+  const handleCreateTask = () => {
+    if (!newTask.title.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a task title.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const taskData = {
+      title: newTask.title,
+      description: newTask.description || undefined,
+      categoryId: newTask.categoryId ? parseInt(newTask.categoryId) : undefined,
+      dueDate: newTask.dueDate || undefined,
+    };
+
+    createTaskMutation.mutate(taskData);
+  };
 
   const todayTasks = tasks.filter(task => {
     const today = new Date().toISOString().split('T')[0];
@@ -100,9 +153,9 @@ export default function Dashboard() {
             </div>
             
             <div className="flex items-center space-x-4">
-              {user?.profileImage && (
+              {user?.profileImageUrl && (
                 <img 
-                  src={user.profileImage}
+                  src={user.profileImageUrl}
                   alt="User profile" 
                   className="w-8 h-8 rounded-full" 
                 />
@@ -110,6 +163,15 @@ export default function Dashboard() {
               <span className="text-sm font-medium text-foreground">
                 {user ? `${user.firstName} ${user.lastName}` : "Loading..."}
               </span>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => window.location.href = '/api/logout'}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Sign Out
+              </Button>
             </div>
           </div>
         </div>
